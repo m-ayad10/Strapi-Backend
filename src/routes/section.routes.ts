@@ -6,12 +6,15 @@ const router = Router();
 
 router.get("/:domain", sectionController.getSections);
 router.post("/:domain/faq", sectionController.addFaq);
-router.put("/:domain/faq", sectionController.replaceFaq);
+router.patch("/:domain/faq", sectionController.replaceFaq);
 router.delete("/:domain/faq", sectionController.deleteFaq);
+
+// Testimonial Section (Bulk)
 router.post("/:domain/testimonial", upload.array("images", 10), sectionController.addTestimonial);
-router.put("/:domain/testimonial", upload.array("images", 10), sectionController.replaceTestimonial);
+router.patch("/:domain/testimonial", upload.array("images", 10), sectionController.replaceTestimonial);
 router.delete("/:domain/testimonial", sectionController.deleteTestimonial);
 
-router.put("/:domain/sections", upload.array("images", 10), sectionController.updateSections);
+// Bulk update for all sections (Reorder ONLY)
+router.patch("/:domain/sections", sectionController.updateSections);
 
 export default router;

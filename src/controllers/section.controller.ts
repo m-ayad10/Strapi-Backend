@@ -92,13 +92,13 @@ export const addTestimonial = async (req: Request, res: Response, next: NextFunc
             return res.status(400).json({ error: "Domain is required" });
         }
 
-        if (!title || !testimonialsJson) {
-            return res.status(400).json({ error: "title and testimonials are required" });
+        if (!testimonialsJson) {
+            return res.status(400).json({ error: "testimonials array is required" });
         }
 
         let testimonials;
         try {
-            testimonials = JSON.parse(testimonialsJson);
+            testimonials = typeof testimonialsJson === 'string' ? JSON.parse(testimonialsJson) : testimonialsJson;
         } catch (e) {
             return res.status(400).json({ error: "testimonials must be valid JSON" });
         }
@@ -107,8 +107,8 @@ export const addTestimonial = async (req: Request, res: Response, next: NextFunc
             return res.status(400).json({ error: "testimonials must be an array" });
         }
 
-        const files = req.files as Express.Multer.File[];
-        const result = await sectionService.addOrUpdateTestimonial(domain, title, testimonials, files);
+        const files = (req.files as Express.Multer.File[]) || [];
+        const result = await sectionService.addTestimonial(domain, title, testimonials, files);
 
         return res.json(result);
     } catch (error: any) {
@@ -128,13 +128,13 @@ export const replaceTestimonial = async (req: Request, res: Response, next: Next
             return res.status(400).json({ error: "Domain is required" });
         }
 
-        if (!title || !testimonialsJson) {
-            return res.status(400).json({ error: "title and testimonials are required" });
+        if (!testimonialsJson) {
+            return res.status(400).json({ error: "testimonials array is required" });
         }
 
         let testimonials;
         try {
-            testimonials = JSON.parse(testimonialsJson);
+            testimonials = typeof testimonialsJson === 'string' ? JSON.parse(testimonialsJson) : testimonialsJson;
         } catch (e) {
             return res.status(400).json({ error: "testimonials must be valid JSON" });
         }
@@ -143,7 +143,7 @@ export const replaceTestimonial = async (req: Request, res: Response, next: Next
             return res.status(400).json({ error: "testimonials must be an array" });
         }
 
-        const files = req.files as Express.Multer.File[];
+        const files = (req.files as Express.Multer.File[]) || [];
         const result = await sectionService.replaceTestimonial(domain, title, testimonials, files);
 
         return res.json(result);
@@ -197,8 +197,7 @@ export const updateSections = async (req: Request, res: Response, next: NextFunc
             return res.status(400).json({ error: "sections must be an array" });
         }
 
-        const files = req.files as Express.Multer.File[];
-        const result = await sectionService.updateSectionsBulk(domain, sections, files);
+        const result = await sectionService.reorderSections(domain, sections);
 
         return res.json(result);
     } catch (error: any) {

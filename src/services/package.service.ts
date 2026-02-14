@@ -1,30 +1,10 @@
 import { strapiClient } from "../config/config";
-import { StrapiResponse, StrapiSingleResponse, Package, StrapiFile } from "../types/strapi.types";
 import { trimStrings } from "../utils/dataUtils";
-import FormData from "form-data";
-
-const uploadFile = async (file: Express.Multer.File): Promise<number> => {
-    const form = new FormData();
-    form.append("files", file.buffer, {
-        filename: file.originalname,
-        contentType: file.mimetype,
-    });
-
-    const response = await strapiClient.post<StrapiFile[]>("/api/upload", form, {
-        headers: { ...form.getHeaders() },
-    });
-
-    const uploadedFile = response.data[0];
-    if (!uploadedFile) {
-        throw new Error("Failed to upload file");
-    }
-
-    return uploadedFile.id;
-};
+import * as strapiApi from "../api/strapi.api";
 
 export const getPackageByDocumentId = async (documentId: string) => {
     try {
-        const response = await strapiClient.get<StrapiSingleResponse<Package>>(`/api/packages/${documentId}?populate=image`);
+        const response = await strapiApi.getPackageByDocumentId(documentId, "populate=image");
         return formatPackage(response.data.data);
     } catch (error: any) {
         if (error.response && error.response.status === 404) {
@@ -50,7 +30,7 @@ const formatPackage = (pkg: any) => {
 export const createPackage = async (data: any, imageFile?: Express.Multer.File) => {
     let imageId;
     if (imageFile) {
-        imageId = await uploadFile(imageFile);
+        imageId = await strapiApi.uploadFile(imageFile);
     }
 
     const payload = trimStrings({
@@ -58,14 +38,14 @@ export const createPackage = async (data: any, imageFile?: Express.Multer.File) 
         image: imageId,
     });
 
-    const response = await strapiClient.post<StrapiSingleResponse<Package>>("/api/packages?populate=image", { data: payload });
+    const response = await strapiApi.createPackage(payload, "populate=image");
     return formatPackage(response.data.data);
 };
 
 export const updatePackage = async (documentId: string, data: any, imageFile?: Express.Multer.File) => {
     let imageId;
     if (imageFile) {
-        imageId = await uploadFile(imageFile);
+        imageId = await strapiApi.uploadFile(imageFile);
     }
 
     const payload = trimStrings({
@@ -73,12 +53,12 @@ export const updatePackage = async (documentId: string, data: any, imageFile?: E
         ...(imageId && { image: imageId }),
     });
 
-    const response = await strapiClient.put<StrapiSingleResponse<Package>>(`/api/packages/${documentId}?populate=image`, { data: payload });
+    const response = await strapiApi.updatePackage(documentId, payload, "populate=image");
     return formatPackage(response.data.data);
 };
 
 export const deletePackage = async (documentId: string) => {
-    const response = await strapiClient.delete<StrapiSingleResponse<Package>>(`/api/packages/${documentId}`);
+    const response = await strapiApi.deletePackage(documentId);
     console.log(response.data)
     return response.data;
 };

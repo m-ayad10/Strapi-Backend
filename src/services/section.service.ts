@@ -1,6 +1,5 @@
-import { strapiClient } from "../config/config";
-import { StrapiResponse, StrapiSingleResponse } from "../types/strapi.types";
-import FormData from "form-data";
+import * as strapiApi from "../api/strapi.api";
+import { formatDetail } from "../utils/dataUtils";
 
 interface FaqItem {
     id?: number;
@@ -13,7 +12,7 @@ interface TestimonialItem {
     name: string;
     role: string;
     quote: string;
-    imagePath?: string;
+    image?: any;
 }
 
 interface FaqSection {
@@ -31,43 +30,18 @@ interface TestimonialSection {
         name: string;
         role: string;
         quote: string;
-        image: number | null;
+        image: any;
     }>;
 }
 
 type Section = FaqSection | TestimonialSection;
 
 /**
- * Upload image to Strapi
- */
-const uploadImage = async (file: Express.Multer.File): Promise<number> => {
-    const form = new FormData();
-    form.append("files", file.buffer, {
-        filename: file.originalname,
-        contentType: file.mimetype,
-    });
-
-    const response = await strapiClient.post<any[]>("/api/upload", form, {
-        headers: { ...form.getHeaders() },
-    });
-
-    const uploadedFile = response.data[0];
-    if (!uploadedFile) {
-        throw new Error("Failed to upload image");
-    }
-
-    return uploadedFile.id;
-};
-
-/**
  * Fetch detail entry by domain
  */
 export const getDetailByDomain = async (domain: string) => {
-    const response = await strapiClient.get<StrapiResponse<any>>(
-        `/api/details?filters[domain][$eq]=${encodeURIComponent(
-            domain
-        )}&populate[banner]=true&populate[packages][populate][image]=true&populate[sections][on][sections.testominal][populate][testominals][populate][image]=true&populate[sections][on][sections.faq][populate][faqs]=*`
-    );
+    const filter = `filters[domain][$eq]=${encodeURIComponent(domain)}`;
+    const response = await strapiApi.getDetails(filter);
 
     if (!response.data.data || response.data.data.length === 0) {
         throw new Error(`No detail found for domain: ${domain}`);
@@ -90,33 +64,17 @@ const getExistingSections = (detail: any): Section[] => {
 };
 
 /**
- * Find FAQ section in existing sections
+ * Find FAQ section index in existing sections
  */
-const findFaqSection = (sections: Section[]): FaqSection | null => {
-    return (sections.find((s) => s.__component === "sections.faq") as FaqSection) || null;
+const findFaqIndex = (sections: Section[]): number => {
+    return sections.findIndex((s) => s.__component === "sections.faq");
 };
 
 /**
- * Find Testimonial section in existing sections
+ * Find Testimonial section index in existing sections
  */
-const findTestimonialSection = (sections: Section[]): TestimonialSection | null => {
-    return (
-        (sections.find((s) => s.__component === "sections.testominal") as TestimonialSection) || null
-    );
-};
-
-/**
- * Remove FAQ section from sections array
- */
-const removeFaqSection = (sections: Section[]): Section[] => {
-    return sections.filter((s) => s.__component !== "sections.faq");
-};
-
-/**
- * Remove Testimonial section from sections array
- */
-const removeTestimonialSection = (sections: Section[]): Section[] => {
-    return sections.filter((s) => s.__component !== "sections.testominal");
+const findTestimonialIndex = (sections: Section[]): number => {
+    return sections.findIndex((s) => s.__component === "sections.testominal");
 };
 
 /**
@@ -128,7 +86,7 @@ const normalizeMedia = (section: Section): Section => {
             ...section,
             testominals: section.testominals.map((t) => ({
                 ...t,
-                image: typeof t.image === "object" ? (t.image as any)?.id : t.image,
+                image: typeof t.image === "object" ? t.image?.id : t.image,
             })),
         };
     }
@@ -136,7 +94,7 @@ const normalizeMedia = (section: Section): Section => {
 };
 
 /**
- * Update detail sections using documentId (Strapi v5)
+ * Remove IDs from nested objects for Strapi v5 compatibility
  */
 const removeIds = (obj: any): any => {
     if (Array.isArray(obj)) {
@@ -158,48 +116,35 @@ const updateSections = async (documentId: string, sections: Section[]) => {
         return removeIds(withMedia);
     });
 
-    const response = await strapiClient.put<StrapiSingleResponse<any>>(
-        `/api/details/${documentId}`,
-        {
-            data: {
-                sections: normalized,
-            },
-        }
-    );
+    const response = await strapiApi.updateSections(documentId, normalized);
 
-    return response.data;
+    return formatDetail(response.data.data);
 };
 
 /**
  * Add or update FAQ section
- * - If FAQ section exists, adds new items to existing faqs array
- * - If FAQ section doesn't exist, creates new section
- * - Ensures only ONE FAQ section exists
+ * - Preserves original section order
  */
 export const addOrUpdateFaq = async (domain: string, title: string, newFaqs: FaqItem[]) => {
     const detail = await getDetailByDomain(domain);
     let sections = getExistingSections(detail);
-    console.log("newFaqs", newFaqs)
-    const existingFaqSection = findFaqSection(sections);
-    console.log("existingFaqSection", existingFaqSection);
-    if (existingFaqSection) {
+
+    const existingIndex = findFaqIndex(sections);
+
+    if (existingIndex !== -1) {
+        const existingFaqSection = sections[existingIndex] as FaqSection;
         const updatedFaqSection: FaqSection = {
             ...existingFaqSection,
             title: title || existingFaqSection.title,
-            faqs: [...existingFaqSection.faqs, ...newFaqs],
+            faqs: [...(existingFaqSection.faqs || []), ...newFaqs],
         };
-
-        // Remove old FAQ section and add updated one
-        sections = removeFaqSection(sections);
-        sections.push(updatedFaqSection);
+        sections[existingIndex] = updatedFaqSection;
     } else {
-        // Create new FAQ section
         const newFaqSection: FaqSection = {
             __component: "sections.faq",
             title,
             faqs: newFaqs,
         };
-
         sections.push(newFaqSection);
     }
 
@@ -208,90 +153,86 @@ export const addOrUpdateFaq = async (domain: string, title: string, newFaqs: Faq
 
 /**
  * Replace entire FAQ section
- * - Replaces all FAQs with new ones
- * - Ensures only ONE FAQ section exists
+ * - Preserves original section order
  */
 export const replaceFaq = async (domain: string, title: string, faqs: FaqItem[]) => {
     const detail = await getDetailByDomain(domain);
     let sections = getExistingSections(detail);
 
-    // Remove existing FAQ section if any
-    sections = removeFaqSection(sections);
-
-    // Create new FAQ section
+    const existingIndex = findFaqIndex(sections);
     const newFaqSection: FaqSection = {
         __component: "sections.faq",
         title,
         faqs,
     };
 
-    sections.push(newFaqSection);
+    if (existingIndex !== -1) {
+        sections[existingIndex] = newFaqSection;
+    } else {
+        sections.push(newFaqSection);
+    }
 
     return updateSections(detail.documentId, sections);
 };
 
 /**
- * Add or update Testimonial section
- * - If Testimonial section exists, adds new items to existing testominals array
- * - If Testimonial section doesn't exist, creates new section
- * - Ensures only ONE Testimonial section exists
- * - Handles image uploads
+ * Add or update Testimonial section (Append logic)
+ * - Preserves original section order
+ * - Fixed sequential image upload
  */
-export const addOrUpdateTestimonial = async (
+export const addTestimonial = async (
     domain: string,
     title: string,
-    newTestimonials: TestimonialItem[],
+    newTestimonials: any[],
     imageFiles?: Express.Multer.File[]
 ) => {
     const detail = await getDetailByDomain(domain);
     let sections = getExistingSections(detail);
 
-    // Upload images and prepare testimonial data
-    const testimonialsWithImages = await Promise.all(
-        newTestimonials.map(async (t, index) => {
-            let imageId: number | null = null;
+    // Upload images sequentially
+    let imagePtr = 0;
+    const testimonialsWithImages = [];
 
-            const imageFile = imageFiles && imageFiles[index];
-            if (imageFile) {
-                try {
-                    imageId = await uploadImage(imageFile);
-                } catch (error) {
-                    console.error("Image upload failed for testimonial:", error);
-                    // Continue without image
-                }
+    for (const t of newTestimonials) {
+        let imageId = t.image;
+        if (typeof imageId === 'object' && imageId?.id) {
+            imageId = imageId.id;
+        }
+
+        const imageFile = imageFiles && imageFiles[imagePtr];
+        // If it's a new testimonial (no image ID) or explicitly needs a new upload
+        if (imageFile && (!imageId || typeof imageId !== 'number')) {
+            try {
+                imageId = await strapiApi.uploadFile(imageFile);
+                imagePtr++;
+            } catch (error) {
+                console.error("Image upload failed for testimonial:", error);
             }
+        }
 
-            return {
-                name: t.name,
-                role: t.role,
-                quote: t.quote,
-                image: imageId,
-            };
-        })
-    );
+        testimonialsWithImages.push({
+            name: t.name,
+            role: t.role,
+            quote: t.quote,
+            image: imageId || null,
+        });
+    }
 
-    const existingTestimonialSection = findTestimonialSection(sections);
+    const existingIndex = findTestimonialIndex(sections);
 
-    if (existingTestimonialSection) {
-        // Update existing Testimonial section - merge new testimonials
-        const updatedTestimonialSection: TestimonialSection = {
-            ...existingTestimonialSection,
-            title, // Update title
-            testominals: [...existingTestimonialSection.testominals, ...testimonialsWithImages],
+    if (existingIndex !== -1) {
+        const existingSection = sections[existingIndex] as TestimonialSection;
+        sections[existingIndex] = {
+            ...existingSection,
+            title: title || existingSection.title,
+            testominals: [...(existingSection.testominals || []), ...testimonialsWithImages],
         };
-
-        // Remove old Testimonial section and add updated one
-        sections = removeTestimonialSection(sections);
-        sections.push(updatedTestimonialSection);
     } else {
-        // Create new Testimonial section
-        const newTestimonialSection: TestimonialSection = {
+        sections.push({
             __component: "sections.testominal",
-            title,
+            title: title || "What Our Clients Say",
             testominals: testimonialsWithImages,
-        };
-
-        sections.push(newTestimonialSection);
+        });
     }
 
     return updateSections(detail.documentId, sections);
@@ -299,55 +240,75 @@ export const addOrUpdateTestimonial = async (
 
 /**
  * Replace entire Testimonial section
- * - Replaces all testimonials with new ones
- * - Ensures only ONE Testimonial section exists
- * - Handles image uploads
+ * - Preserves original section order
+ * - Fixed sequential image upload
  */
 export const replaceTestimonial = async (
     domain: string,
     title: string,
-    testimonials: TestimonialItem[],
+    testimonials: any[],
     imageFiles?: Express.Multer.File[]
 ) => {
     const detail = await getDetailByDomain(domain);
     let sections = getExistingSections(detail);
 
-    // Upload images and prepare testimonial data
-    const testimonialsWithImages = await Promise.all(
-        testimonials.map(async (t, index) => {
-            let imageId: number | null = null;
+    // Upload images sequentially
+    let imagePtr = 0;
+    const testimonialsWithImages = [];
 
-            const imageFile = imageFiles && imageFiles[index];
-            if (imageFile) {
-                try {
-                    imageId = await uploadImage(imageFile);
-                } catch (error) {
-                    console.error("Image upload failed for testimonial:", error);
-                }
+    for (const t of testimonials) {
+        let imageId = t.image;
+        if (typeof imageId === 'object' && imageId?.id) {
+            imageId = imageId.id;
+        }
+
+        const imageFile = imageFiles && imageFiles[imagePtr];
+        // If it's a new testimonial or we are replacing images
+        if (imageFile && (!imageId || typeof imageId !== 'number')) {
+            try {
+                imageId = await strapiApi.uploadFile(imageFile);
+                imagePtr++;
+            } catch (error) {
+                console.error("Image upload failed for testimonial:", error);
             }
+        }
 
-            return {
-                name: t.name,
-                role: t.role,
-                quote: t.quote,
-                image: imageId,
-            };
-        })
-    );
+        testimonialsWithImages.push({
+            name: t.name,
+            role: t.role,
+            quote: t.quote,
+            image: imageId || null,
+        });
+    }
 
-    // Remove existing Testimonial section if any
-    sections = removeTestimonialSection(sections);
-
-    // Create new Testimonial section
-    const newTestimonialSection: TestimonialSection = {
+    const newSection: TestimonialSection = {
         __component: "sections.testominal",
-        title,
+        title: title || "What Our Clients Say",
         testominals: testimonialsWithImages,
     };
 
-    sections.push(newTestimonialSection);
+    const existingIndex = findTestimonialIndex(sections);
+    if (existingIndex !== -1) {
+        sections[existingIndex] = newSection;
+    } else {
+        sections.push(newSection);
+    }
 
     return updateSections(detail.documentId, sections);
+};
+
+/**
+ * Remove FAQ section from sections array
+ */
+const removeFaqSection = (sections: Section[]): Section[] => {
+    return sections.filter((s) => s.__component !== "sections.faq");
+};
+
+/**
+ * Remove Testimonial section from sections array
+ */
+const removeTestimonialSection = (sections: Section[]): Section[] => {
+    return sections.filter((s) => s.__component !== "sections.testominal");
 };
 
 /**
@@ -380,11 +341,47 @@ export const deleteTestimonial = async (domain: string) => {
 export const getSections = async (domain: string) => {
     const detail = await getDetailByDomain(domain);
     const sections = getExistingSections(detail);
+    const faqIdx = findFaqIndex(sections);
+    const testimonialIdx = findTestimonialIndex(sections);
 
     return {
-        faq: findFaqSection(sections),
-        testimonial: findTestimonialSection(sections),
+        faq: faqIdx !== -1 ? sections[faqIdx] : null,
+        testimonial: testimonialIdx !== -1 ? sections[testimonialIdx] : null,
     };
+};
+
+/**
+ * Reorder sections ONLY
+ * - Takes an array of section identifiers (like { __component: "..." })
+ * - Matches them against existing sections
+ * - Updates Strapi with the new order, preserving all existing content
+ */
+export const reorderSections = async (domain: string, newOrder: any[]) => {
+    const detail = await getDetailByDomain(domain);
+    const existingSections = getExistingSections(detail);
+
+    // Rearrange complete existing section objects based on the new order of components
+    const reordered: Section[] = [];
+
+    for (const item of newOrder) {
+        const comp = item.__component;
+        if (!comp) continue;
+
+        const found = existingSections.find(s => s.__component === comp);
+        if (found) {
+            reordered.push(found);
+        }
+    }
+
+    // Optional: Add back any sections not mentioned in the new order at the end
+    // (Though usually the frontend should send all of them)
+    existingSections.forEach(s => {
+        if (!reordered.find(r => r.__component === s.__component)) {
+            reordered.push(s);
+        }
+    });
+
+    return updateSections(detail.documentId, reordered);
 };
 
 /**
@@ -430,7 +427,7 @@ export const updateSectionsBulk = async (
                     if (imageFiles && imageFiles[imagePtr] && (!t.image || typeof t.image !== 'number')) {
                         const file = imageFiles[imagePtr];
                         if (file) {
-                            imageId = await uploadImage(file);
+                            imageId = await strapiApi.uploadFile(file);
                             imagePtr++;
                         }
                     } else if (typeof t.image === 'object' && t.image?.id) {
