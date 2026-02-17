@@ -21,9 +21,12 @@ const formatPackage = (pkg: any) => {
         name: pkg.name,
         price: pkg.price,
         description: pkg.description,
-        image: pkg.image?.url
-            ? `${strapiClient.defaults.baseURL}${pkg.image.url}`
-            : null,
+        image: {
+            url: pkg.image?.url
+                ? `${strapiClient.defaults.baseURL}${pkg.image.url}`
+                : null,
+            id: pkg.image?.id
+        }
     };
 };
 

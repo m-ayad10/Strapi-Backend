@@ -1,5 +1,5 @@
 import * as strapiApi from "../api/strapi.api";
-import { formatDetail } from "../utils/dataUtils";
+import { formatTenant } from "../utils/dataUtils";
 
 interface FaqItem {
     id?: number;
@@ -23,10 +23,10 @@ interface FaqSection {
 }
 
 interface TestimonialSection {
-    __component: "sections.testominal";
+    __component: "sections.testimonials";
     id?: number;
     title: string;
-    testominals: Array<{
+    testimonials: Array<{
         name: string;
         role: string;
         quote: string;
@@ -37,24 +37,24 @@ interface TestimonialSection {
 type Section = FaqSection | TestimonialSection;
 
 /**
- * Fetch detail entry by domain
+ * Fetch tenant entry by domain
  */
-export const getDetailByDomain = async (domain: string) => {
+export const getTenantByDomain = async (domain: string) => {
     const filter = `filters[domain][$eq]=${encodeURIComponent(domain)}`;
-    const response = await strapiApi.getDetails(filter);
+    const response = await strapiApi.getTenants(filter);
 
     if (!response.data.data || response.data.data.length === 0) {
-        throw new Error(`No detail found for domain: ${domain}`);
+        throw new Error(`No tenant found for domain: ${domain}`);
     }
 
     return response.data.data[0];
 };
 
 /**
- * Get existing sections from detail entry
+ * Get existing sections from tenant entry
  */
-const getExistingSections = (detail: any): Section[] => {
-    return (detail?.sections || []).filter((section: any) => {
+const getExistingSections = (tenant: any): Section[] => {
+    return (tenant?.sections || []).filter((section: any) => {
         if (!section.__component) {
             console.warn("Section missing __component, skipping:", section);
             return false;
@@ -74,17 +74,17 @@ const findFaqIndex = (sections: Section[]): number => {
  * Find Testimonial section index in existing sections
  */
 const findTestimonialIndex = (sections: Section[]): number => {
-    return sections.findIndex((s) => s.__component === "sections.testominal");
+    return sections.findIndex((s) => s.__component === "sections.testimonials");
 };
 
 /**
  * Normalize media fields (convert objects to IDs)
  */
 const normalizeMedia = (section: Section): Section => {
-    if (section.__component === "sections.testominal") {
+    if (section.__component === "sections.testimonials") {
         return {
             ...section,
-            testominals: section.testominals.map((t) => ({
+            testimonials: section.testimonials.map((t) => ({
                 ...t,
                 image: typeof t.image === "object" ? t.image?.id : t.image,
             })),
@@ -118,16 +118,15 @@ const updateSections = async (documentId: string, sections: Section[]) => {
 
     const response = await strapiApi.updateSections(documentId, normalized);
 
-    return formatDetail(response.data.data);
+    return formatTenant(response.data.data);
 };
 
 /**
  * Add or update FAQ section
- * - Preserves original section order
  */
 export const addOrUpdateFaq = async (domain: string, title: string, newFaqs: FaqItem[]) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
 
     const existingIndex = findFaqIndex(sections);
 
@@ -148,16 +147,15 @@ export const addOrUpdateFaq = async (domain: string, title: string, newFaqs: Faq
         sections.push(newFaqSection);
     }
 
-    return updateSections(detail.documentId, sections);
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
  * Replace entire FAQ section
- * - Preserves original section order
  */
 export const replaceFaq = async (domain: string, title: string, faqs: FaqItem[]) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
 
     const existingIndex = findFaqIndex(sections);
     const newFaqSection: FaqSection = {
@@ -172,13 +170,11 @@ export const replaceFaq = async (domain: string, title: string, faqs: FaqItem[])
         sections.push(newFaqSection);
     }
 
-    return updateSections(detail.documentId, sections);
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
- * Add or update Testimonial section (Append logic)
- * - Preserves original section order
- * - Fixed sequential image upload
+ * Add or update Testimonial section
  */
 export const addTestimonial = async (
     domain: string,
@@ -186,10 +182,9 @@ export const addTestimonial = async (
     newTestimonials: any[],
     imageFiles?: Express.Multer.File[]
 ) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
 
-    // Upload images sequentially
     let imagePtr = 0;
     const testimonialsWithImages = [];
 
@@ -200,7 +195,6 @@ export const addTestimonial = async (
         }
 
         const imageFile = imageFiles && imageFiles[imagePtr];
-        // If it's a new testimonial (no image ID) or explicitly needs a new upload
         if (imageFile && (!imageId || typeof imageId !== 'number')) {
             try {
                 imageId = await strapiApi.uploadFile(imageFile);
@@ -225,23 +219,21 @@ export const addTestimonial = async (
         sections[existingIndex] = {
             ...existingSection,
             title: title || existingSection.title,
-            testominals: [...(existingSection.testominals || []), ...testimonialsWithImages],
+            testimonials: [...(existingSection.testimonials || []), ...testimonialsWithImages],
         };
     } else {
         sections.push({
-            __component: "sections.testominal",
+            __component: "sections.testimonials",
             title: title || "What Our Clients Say",
-            testominals: testimonialsWithImages,
+            testimonials: testimonialsWithImages,
         });
     }
 
-    return updateSections(detail.documentId, sections);
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
  * Replace entire Testimonial section
- * - Preserves original section order
- * - Fixed sequential image upload
  */
 export const replaceTestimonial = async (
     domain: string,
@@ -249,10 +241,9 @@ export const replaceTestimonial = async (
     testimonials: any[],
     imageFiles?: Express.Multer.File[]
 ) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
 
-    // Upload images sequentially
     let imagePtr = 0;
     const testimonialsWithImages = [];
 
@@ -263,7 +254,6 @@ export const replaceTestimonial = async (
         }
 
         const imageFile = imageFiles && imageFiles[imagePtr];
-        // If it's a new testimonial or we are replacing images
         if (imageFile && (!imageId || typeof imageId !== 'number')) {
             try {
                 imageId = await strapiApi.uploadFile(imageFile);
@@ -282,9 +272,9 @@ export const replaceTestimonial = async (
     }
 
     const newSection: TestimonialSection = {
-        __component: "sections.testominal",
+        __component: "sections.testimonials",
         title: title || "What Our Clients Say",
-        testominals: testimonialsWithImages,
+        testimonials: testimonialsWithImages,
     };
 
     const existingIndex = findTestimonialIndex(sections);
@@ -294,53 +284,35 @@ export const replaceTestimonial = async (
         sections.push(newSection);
     }
 
-    return updateSections(detail.documentId, sections);
-};
-
-/**
- * Remove FAQ section from sections array
- */
-const removeFaqSection = (sections: Section[]): Section[] => {
-    return sections.filter((s) => s.__component !== "sections.faq");
-};
-
-/**
- * Remove Testimonial section from sections array
- */
-const removeTestimonialSection = (sections: Section[]): Section[] => {
-    return sections.filter((s) => s.__component !== "sections.testominal");
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
  * Delete FAQ section completely
  */
 export const deleteFaq = async (domain: string) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
-
-    sections = removeFaqSection(sections);
-
-    return updateSections(detail.documentId, sections);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
+    sections = sections.filter((s) => s.__component !== "sections.faq");
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
  * Delete Testimonial section completely
  */
 export const deleteTestimonial = async (domain: string) => {
-    const detail = await getDetailByDomain(domain);
-    let sections = getExistingSections(detail);
-
-    sections = removeTestimonialSection(sections);
-
-    return updateSections(detail.documentId, sections);
+    const tenant = await getTenantByDomain(domain);
+    let sections = getExistingSections(tenant);
+    sections = sections.filter((s) => s.__component !== "sections.testimonials");
+    return updateSections(tenant.documentId, sections);
 };
 
 /**
  * Get current sections structure
  */
 export const getSections = async (domain: string) => {
-    const detail = await getDetailByDomain(domain);
-    const sections = getExistingSections(detail);
+    const tenant = await getTenantByDomain(domain);
+    const sections = getExistingSections(tenant);
     const faqIdx = findFaqIndex(sections);
     const testimonialIdx = findTestimonialIndex(sections);
 
@@ -352,78 +324,59 @@ export const getSections = async (domain: string) => {
 
 /**
  * Reorder sections ONLY
- * - Takes an array of section identifiers (like { __component: "..." })
- * - Matches them against existing sections
- * - Updates Strapi with the new order, preserving all existing content
  */
 export const reorderSections = async (domain: string, newOrder: any[]) => {
-    const detail = await getDetailByDomain(domain);
-    const existingSections = getExistingSections(detail);
-
-    // Rearrange complete existing section objects based on the new order of components
+    const tenant = await getTenantByDomain(domain);
+    const existingSections = getExistingSections(tenant);
     const reordered: Section[] = [];
 
     for (const item of newOrder) {
         const comp = item.__component;
         if (!comp) continue;
-
         const found = existingSections.find(s => s.__component === comp);
         if (found) {
             reordered.push(found);
         }
     }
 
-    // Optional: Add back any sections not mentioned in the new order at the end
-    // (Though usually the frontend should send all of them)
     existingSections.forEach(s => {
         if (!reordered.find(r => r.__component === s.__component)) {
             reordered.push(s);
         }
     });
 
-    return updateSections(detail.documentId, reordered);
+    return updateSections(tenant.documentId, reordered);
 };
 
 /**
  * Bulk update and reorder sections
- * - Enforces single-instance rule
- * - Handles image uploads for testimonials
- * - Preserves order from the input array
  */
 export const updateSectionsBulk = async (
     domain: string,
     sectionsData: any[],
     imageFiles?: Express.Multer.File[]
 ) => {
-    const detail = await getDetailByDomain(domain);
+    const tenant = await getTenantByDomain(domain);
     const componentCounters: Record<string, number> = {};
 
-    // 1. Validate single instance rule & Normalize components
     const validatedSections = await Promise.all(
         sectionsData.map(async (section: any) => {
             const comp = section.__component;
             if (!comp) throw new Error("Each section must have a __component field");
 
-            // Enforce single instance
             componentCounters[comp] = (componentCounters[comp] || 0) + 1;
             if (componentCounters[comp] > 1) {
                 throw new Error(`Component ${comp} can only exist once.`);
             }
 
-            // 2. Handle specific component logic (like images)
-            if (comp === "sections.testominal") {
-                const testimonials = section.testominals || [];
+            if (comp === "sections.testimonials") {
+                const testimonials = section.testimonials || [];
                 let imagePtr = 0;
                 const testimonialsWithImages = [];
 
                 for (const t of testimonials) {
                     let imageId = t.image;
 
-                    // If it's a new testimonial or needs update and we have files
-                    // Note: This logic depends on how frontend sends files. 
-                    // For simplicity, we assume files match items that don't have IDs or 
-                    // have a flag. Here we just take files sequentially if they are provided 
-                    // and the item expects an image.
                     if (imageFiles && imageFiles[imagePtr] && (!t.image || typeof t.image !== 'number')) {
                         const file = imageFiles[imagePtr];
                         if (file) {
@@ -445,7 +398,7 @@ export const updateSectionsBulk = async (
                 return {
                     __component: comp,
                     title: section.title,
-                    testominals: testimonialsWithImages,
+                    testimonials: testimonialsWithImages,
                 };
             }
 
@@ -464,6 +417,5 @@ export const updateSectionsBulk = async (
         })
     );
 
-    // 3. Update Strapi
-    return updateSections(detail.documentId, validatedSections);
+    return updateSections(tenant.documentId, validatedSections);
 };

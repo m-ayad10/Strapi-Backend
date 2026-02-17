@@ -12,7 +12,7 @@ export const getSections = async (req: Request, res: Response, next: NextFunctio
         const sections = await sectionService.getSections(domain);
         return res.json(sections);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -35,7 +35,7 @@ export const addFaq = async (req: Request, res: Response, next: NextFunction) =>
         const result = await sectionService.addOrUpdateFaq(domain, title, faqs);
         return res.json(result);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -58,7 +58,7 @@ export const replaceFaq = async (req: Request, res: Response, next: NextFunction
         const result = await sectionService.replaceFaq(domain, title, faqs);
         return res.json(result);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -76,7 +76,7 @@ export const deleteFaq = async (req: Request, res: Response, next: NextFunction)
         const result = await sectionService.deleteFaq(domain);
         return res.status(204).send();
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -112,7 +112,7 @@ export const addTestimonial = async (req: Request, res: Response, next: NextFunc
 
         return res.json(result);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -148,7 +148,7 @@ export const replaceTestimonial = async (req: Request, res: Response, next: Next
 
         return res.json(result);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -166,7 +166,7 @@ export const deleteTestimonial = async (req: Request, res: Response, next: NextF
         const result = await sectionService.deleteTestimonial(domain);
         return res.status(204).send();
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);
@@ -201,7 +201,7 @@ export const updateSections = async (req: Request, res: Response, next: NextFunc
 
         return res.json(result);
     } catch (error: any) {
-        if (error.message?.includes("No detail found")) {
+        if (error.message?.includes("No tenant found")) {
             return res.status(404).json({ error: error.message });
         }
         next(error);

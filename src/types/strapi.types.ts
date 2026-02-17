@@ -43,7 +43,16 @@ export interface Package {
     image?: StrapiFile;
 }
 
-export interface Detail {
+export interface Template {
+    id: number;
+    documentId: string;
+    model: string;
+    createdAt?: string;
+    updatedAt?: string;
+    publishedAt?: string;
+}
+
+export interface Tenant {
     id: number;
     documentId: string;
     domain: string;
@@ -53,4 +62,5 @@ export interface Detail {
     banner?: StrapiFile;
     packages?: Package[];
     sections?: any[];
+    template?: Template;
 }

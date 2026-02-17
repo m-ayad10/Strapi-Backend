@@ -1,16 +1,19 @@
 import express, { Application } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { CONFIG } from "./config/config";
 import tenantRoutes from "./routes/tenant.routes";
-import detailRoutes from "./routes/detail.routes";
 import packageRoutes from "./routes/package.routes";
 import sectionRoutes from "./routes/section.routes";
+import authRoutes from "./routes/auth.routes";
+import templateRoutes from "./routes/template.routes";
 import { errorHandler } from "./middlewares/errorHandler";
 
 const app: Application = express();
 
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
 app.use(
   cors({
     origin: true,
@@ -22,9 +25,10 @@ app.use(
 
 // Routes
 app.use("/tenant", tenantRoutes);
-app.use("/details", detailRoutes);
 app.use("/packages", packageRoutes);
 app.use("/sections", sectionRoutes);
+app.use("/auth", authRoutes);
+app.use("/templates", templateRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {

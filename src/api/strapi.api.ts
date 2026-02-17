@@ -3,9 +3,9 @@ import { StrapiResponse, StrapiSingleResponse, StrapiFile } from "../types/strap
 import FormData from "form-data";
 
 /**
- * Common population string for Details
+ * Common population string for Tenants
  */
-export const DETAIL_POPULATE = `populate[banner]=true&populate[packages][populate][image]=true&populate[sections][on][sections.testominal][populate][testominals][populate][image]=true&populate[sections][on][sections.faq][populate][faqs]=*`;
+export const TENANT_POPULATE = `populate[banner]=true&populate[packages][populate][image]=true&populate[sections][on][sections.testimonials][populate][testimonials][populate][image]=true&populate[sections][on][sections.faq][populate][faqs]=*&populate[template]=true`;
 
 /**
  * Upload a file to Strapi
@@ -30,30 +30,37 @@ export const uploadFile = async (file: Express.Multer.File): Promise<number> => 
 };
 
 /**
- * Detail API calls
+ * Tenant API calls
  */
-export const getDetails = async (params: string = "") => {
+export const getTenants = async (params: string = "") => {
     const query = params ? `&${params}` : "";
-    return await strapiClient.get<StrapiResponse<any>>(`/api/details?${DETAIL_POPULATE}${query}`);
+    return await strapiClient.get<StrapiResponse<any>>(`/api/tenants?${TENANT_POPULATE}${query}`);
 };
 
-export const getDetailByDocumentId = async (documentId: string, params: string = "") => {
+export const getTenantByDocumentId = async (documentId: string, params: string = "") => {
     const query = params ? `&${params}` : "";
-    return await strapiClient.get<StrapiSingleResponse<any>>(`/api/details/${documentId}?${DETAIL_POPULATE}${query}`);
+    return await strapiClient.get<StrapiSingleResponse<any>>(`/api/tenants/${documentId}?${TENANT_POPULATE}${query}`);
 };
 
-export const createDetail = async (data: any, params: string = "") => {
+export const createTenant = async (data: any, params: string = "") => {
     const query = params ? `&${params}` : "";
-    return await strapiClient.post<StrapiSingleResponse<any>>(`/api/details?${DETAIL_POPULATE}${query}`, { data });
+    return await strapiClient.post<StrapiSingleResponse<any>>(`/api/tenants?${TENANT_POPULATE}${query}`, { data });
 };
 
-export const updateDetail = async (documentId: string, data: any, params: string = "") => {
+export const updateTenant = async (documentId: string, data: any, params: string = "") => {
     const query = params ? `&${params}` : "";
-    return await strapiClient.put<StrapiSingleResponse<any>>(`/api/details/${documentId}?${DETAIL_POPULATE}${query}`, { data });
+    return await strapiClient.put<StrapiSingleResponse<any>>(`/api/tenants/${documentId}?${TENANT_POPULATE}${query}`, { data });
 };
 
-export const deleteDetail = async (documentId: string) => {
-    return await strapiClient.delete<StrapiSingleResponse<any>>(`/api/details/${documentId}`);
+export const deleteTenant = async (documentId: string) => {
+    return await strapiClient.delete<StrapiSingleResponse<any>>(`/api/tenants/${documentId}`);
+};
+
+/**
+ * Template API calls
+ */
+export const getTemplates = async () => {
+    return await strapiClient.get<StrapiResponse<any>>("/api/templates?populate[image]=true");
 };
 
 /**
@@ -83,7 +90,7 @@ export const deletePackage = async (documentId: string) => {
  */
 export const updateSections = async (documentId: string, sections: any[]) => {
     return await strapiClient.put<StrapiSingleResponse<any>>(
-        `/api/details/${documentId}?${DETAIL_POPULATE}`,
+        `/api/tenants/${documentId}?${TENANT_POPULATE}`,
         {
             data: {
                 sections,

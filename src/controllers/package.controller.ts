@@ -4,7 +4,7 @@ import { isValidPrice, validateRequiredFields } from "../utils/validation";
 
 export const createPackage = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const requiredFields = ["name", "price", "description", "detail"];
+        const requiredFields = ["name", "price", "description", "tenant"];
         const validationError = validateRequiredFields(req.body, requiredFields);
 
         if (validationError) {

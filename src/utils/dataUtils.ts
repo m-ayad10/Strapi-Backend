@@ -19,24 +19,43 @@ export const trimStrings = (data: any): any => {
     return data;
 };
 
-export const formatDetail = (detail: any) => {
-    const formatted: any = {
-        id: detail.id,
-        documentId: detail.documentId,
-        domain: detail.domain,
-        title: detail.title,
-        color: detail.color,
-        backgroundColor: detail.backgroundColor,
-        banner: detail.banner?.url
+export const formatTemplate = (template: any) => {
+    if (!template) return null;
+    return {
+        id: template.id,
+        documentId: template.documentId,
+        model: template.model,
+        image: template.image?.url
             ? {
-                id: detail.banner.id,
-                url: `${strapiClient.defaults.baseURL}${detail.banner.url}`,
+                id: template.image.id,
+                url: `${strapiClient.defaults.baseURL}${template.image.url}`,
             }
             : null,
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt,
+        publishedAt: template.publishedAt,
+    };
+};
+
+export const formatTenant = (tenant: any) => {
+    const formatted: any = {
+        id: tenant.id,
+        documentId: tenant.documentId,
+        domain: tenant.domain,
+        title: tenant.title,
+        color: tenant.color,
+        backgroundColor: tenant.backgroundColor,
+        banner: tenant.banner?.url
+            ? {
+                id: tenant.banner.id,
+                url: `${strapiClient.defaults.baseURL}${tenant.banner.url}`,
+            }
+            : null,
+        template: formatTemplate(tenant.template),
     };
 
-    if (detail.packages && Array.isArray(detail.packages)) {
-        formatted.packages = detail.packages.map((pkg: any) => ({
+    if (tenant.packages && Array.isArray(tenant.packages)) {
+        formatted.packages = tenant.packages.map((pkg: any) => ({
             id: pkg.id,
             documentId: pkg.documentId,
             name: pkg.name,
@@ -51,12 +70,12 @@ export const formatDetail = (detail: any) => {
         }));
     }
 
-    if (detail.sections && Array.isArray(detail.sections)) {
-        formatted.sections = detail.sections.map((section: any) => {
-            if (section.__component === "sections.testominal") {
+    if (tenant.sections && Array.isArray(tenant.sections)) {
+        formatted.sections = tenant.sections.map((section: any) => {
+            if (section.__component === "sections.testimonials") {
                 return {
                     ...section,
-                    testominals: (section.testominals || []).map((t: any) => ({
+                    testimonials: (section.testimonials || []).map((t: any) => ({
                         ...t,
                         image: t.image?.url
                             ? {
@@ -65,6 +84,14 @@ export const formatDetail = (detail: any) => {
                             }
                             : null,
                     })),
+                };
+            }
+            if (section.__component === "sections.faq") {
+                return {
+                    ...section,
+                    faqs: (section.faqs || []).map((faq: any) => ({
+                        ...faq
+                    }))
                 };
             }
             return section;
